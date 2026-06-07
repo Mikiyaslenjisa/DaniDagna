@@ -3,6 +3,9 @@
     "name": "DaniDagna",
     "slug": "danidagna",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
     "platforms": ["android"],
     "android": {
       "package": "com.mikeylan.danidagna"
