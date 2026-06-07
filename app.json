@@ -3,12 +3,14 @@
     "name": "DaniDagna",
     "slug": "danidagna",
     "version": "1.0.0",
-    "runtimeVersion": {
-      "policy": "sdkVersion"
-    },
     "platforms": ["android"],
     "android": {
       "package": "com.mikeylan.danidagna"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ca6f35c9-29d9-40f5-8341-ccc85e869547"
+      }
     }
   }
 }
