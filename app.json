@@ -3,13 +3,14 @@
     "name": "DaniDagna",
     "slug": "danidagna",
     "version": "1.0.0",
+    "owner": "mikeylans-team",
     "platforms": ["android"],
     "android": {
       "package": "com.mikeylan.danidagna"
     },
     "extra": {
       "eas": {
-        "projectId": "ca6f35c9-29d9-40f5-8341-ccc85e869547"
+        "projectId": "375f7565-fb8c-4eae-9a11-1f941cffe273"
       }
     }
   }
