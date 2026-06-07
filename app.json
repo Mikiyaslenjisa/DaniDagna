@@ -1,0 +1,8 @@
+{
+  "expo": {
+    "name": "DaniDagna",
+    "slug": "danidagna",
+    "version": "1.0.0",
+    "platforms": ["android"]
+  }
+}
