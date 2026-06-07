@@ -5,6 +5,9 @@
     "version": "1.0.0",
     "owner": "mikeylans-team",
     "platforms": ["android"],
+    "splash": {
+      "backgroundColor": "#191919"
+    },
     "android": {
       "package": "com.mikeylan.danidagna"
     },
