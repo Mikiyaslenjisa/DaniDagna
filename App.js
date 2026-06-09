@@ -36,98 +36,67 @@ export default function App() {
 
   const remaining = (currentRows) => TOTAL - totalScored(currentRows);
 
-  // Core elimination + winner logic
-  const checkElimination = (currentRows, currentCols, currentEliminated) => {
-    const rem = TOTAL - currentCols.reduce((acc, c) => acc + getSum(c, currentRows), 0);
-    const activeCols = currentCols.filter(c => !currentEliminated.includes(c));
+  useEffect(() => {
+    if (winner) return;
+    const rem = remaining(rows);
+    const activeCols = cols.filter(c => !eliminated.includes(c));
+    if (activeCols.length === 0) return;
 
-    if (activeCols.length === 0) return { newEliminated: currentEliminated, msg: '', win: '' };
-
-    const scores = activeCols.map(c => ({ col: c, score: getSum(c, currentRows) }));
+    const scores = activeCols.map(c => ({ col: c, score: getSum(c, rows) }));
     const maxScore = Math.max(...scores.map(s => s.score));
 
-    // A player is eliminated only if their score + ALL remaining pts < the current highest score
-    // meaning they CANNOT beat the leader even in the best case
     const newlyEliminated = scores
       .filter(s => s.score + rem < maxScore)
       .map(s => s.col);
 
-    const allEliminated = [...new Set([...currentEliminated, ...newlyEliminated])];
-    const stillActive = currentCols.filter(c => !allEliminated.includes(c));
-
-    let msg = '';
-    let win = '';
+    const allEliminated = [...new Set([...eliminated, ...newlyEliminated])];
+    const stillActive = cols.filter(c => !allEliminated.includes(c));
 
     if (newlyEliminated.length > 0) {
-      const outNames = newlyEliminated.join(', ');
+      setEliminated(allEliminated);
       if (stillActive.length === 1) {
-        win = stillActive[0];
-        msg = '';
-      } else if (stillActive.length > 1) {
+        const winScore = getSum(stillActive[0], rows);
+        setWinner(stillActive[0]);
+        setNotification(`🏆 Player ${stillActive[0]} WINS with ${winScore} pts!`);
+        return;
+      } else {
+        const outNames = newlyEliminated.join(', ');
         const leftNames = stillActive.join(' & ');
-        msg = `❌ Player ${outNames} ${newlyEliminated.length > 1 ? 'are' : 'is'} out!\n✅ Player ${leftNames} still in the game!`;
+        setNotification(`❌ Player ${outNames} ${newlyEliminated.length > 1 ? 'are' : 'is'} out!\n✅ Player ${leftNames} still in the game!`);
       }
     }
 
-    // If remaining = 0, find winner by highest score
-    if (rem === 0 && !win) {
-      const activeScores = stillActive.map(c => ({ col: c, score: getSum(c, currentRows) }));
+    if (rem === 0 && !winner) {
+      const activeScores = stillActive.map(c => ({ col: c, score: getSum(c, rows) }));
       const topScore = Math.max(...activeScores.map(s => s.score));
       const topPlayers = activeScores.filter(s => s.score === topScore);
       if (topPlayers.length === 1) {
-        win = topPlayers[0].col;
+        setWinner(topPlayers[0].col);
+        setNotification(`🏆 Player ${topPlayers[0].col} WINS with ${topScore} pts!`);
       } else {
-        // Tie
-        msg = `🤝 Tie! Players ${topPlayers.map(s => s.col).join(' & ')} drew with ${topScore} pts!`;
+        setNotification(`🤝 Tie! Players ${topPlayers.map(s => s.col).join(' & ')} with ${topScore} pts!`);
       }
     }
-
-    return { newEliminated: allEliminated, msg, win };
-  };
-
-  useEffect(() => {
-    if (winner) return; // game already over
-    const { newEliminated, msg, win } = checkElimination(rows, cols, eliminated);
-
-    if (win) {
-      const winScore = getSum(win, rows);
-      setWinner(win);
-      setEliminated(newEliminated);
-      setNotification(`🏆 Player ${win} WINS with ${winScore} pts!`);
-      return;
-    }
-
-    if (JSON.stringify(newEliminated) !== JSON.stringify(eliminated)) {
-      setEliminated(newEliminated);
-    }
-    if (msg) setNotification(msg);
   }, [rows]);
 
   const updateCell = (rowIdx, col, value) => {
     const safe = value.replace(/[^0-9]/g, '');
-
     if (safe === '') {
       setRows(rows.map((r, i) => i === rowIdx ? { ...r, [col]: '' } : r));
       return;
     }
-
     const num = parseInt(safe);
-
     if (num > MAX_BALL) {
       Alert.alert('Invalid!', `Maximum ball number is ${MAX_BALL}`);
       return;
     }
-
     const oldVal = parseFloat(rows[rowIdx][col]) || 0;
-    const currentTotal = totalScored(rows);
-    const newTotal = currentTotal - oldVal + num;
-
+    const newTotal = totalScored(rows) - oldVal + num;
     if (newTotal > TOTAL) {
-      const canAdd = TOTAL - currentTotal + oldVal;
+      const canAdd = TOTAL - totalScored(rows) + oldVal;
       Alert.alert('Exceeds 120!', `Only ${canAdd} point${canAdd === 1 ? '' : 's'} remaining!`);
       return;
     }
-
     setRows(rows.map((r, i) => i === rowIdx ? { ...r, [col]: safe } : r));
   };
 
@@ -196,7 +165,6 @@ export default function App() {
     >
       <StatusBar barStyle="light-content" backgroundColor="#191919" />
 
-      {/* Header */}
       <View style={styles.header}>
         {editingTitle ? (
           <TextInput
@@ -204,7 +172,8 @@ export default function App() {
             value={title}
             onChangeText={setTitle}
             onBlur={() => setEditingTitle(false)}
-            autoFocus selectTextOnFocus
+            autoFocus
+            selectTextOnFocus
           />
         ) : (
           <TouchableOpacity onPress={() => setEditingTitle(true)}>
@@ -222,10 +191,9 @@ export default function App() {
             <Text style={styles.resetText}>🔄 Reset</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.ruleText}>Balls: 1–15  •  Total: 120 pts  •  Ball 3 = Break (6 pts in scoring)</Text>
+        <Text style={styles.ruleText}>Balls: 1–15  •  Total: 120 pts</Text>
       </View>
 
-      {/* Notification banner */}
       {notification ? (
         <View style={[styles.notifBox, winner && styles.winnerBox]}>
           <Text style={[styles.notifText, winner && styles.winnerText]}>{notification}</Text>
@@ -235,26 +203,14 @@ export default function App() {
         </View>
       ) : null}
 
-      {/* Game over bar */}
-      {rem === 0 && !winner ? (
-        <View style={styles.gameOverBox}>
-          <Text style={styles.gameOverText}>🏁 All 120 points used!</Text>
-        </View>
-      ) : null}
-
-      {/* Player status row */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusScroll}>
         <View style={styles.statusRow}>
-          {cols.map((col, idx) => {
+          {cols.map(col => {
             const score = getSum(col, rows);
             const isOut = eliminated.includes(col);
             const isWin = winner === col;
             return (
-              <View key={col} style={[
-                styles.statusCard,
-                isOut && styles.statusCardOut,
-                isWin && styles.statusCardWin,
-              ]}>
+              <View key={col} style={[styles.statusCard, isOut && styles.statusCardOut, isWin && styles.statusCardWin]}>
                 <Text style={[styles.statusName, isOut && styles.statusNameOut, isWin && styles.statusNameWin]}>
                   {isWin ? '🏆 ' : isOut ? '❌ ' : '🎱 '}Player {col}
                 </Text>
@@ -270,46 +226,30 @@ export default function App() {
         </View>
       </ScrollView>
 
-      {/* Table */}
       <ScrollView style={styles.scrollArea} keyboardShouldPersistTaps="handled">
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View>
-            {/* Column headers */}
             <View style={styles.colHeaderRow}>
               {cols.map(col => (
-                <View key={col} style={[
-                  styles.colHeaderCell, { width: COL_W },
-                  eliminated.includes(col) && styles.eliminatedCol
-                ]}>
+                <View key={col} style={[styles.colHeaderCell, { width: COL_W }, eliminated.includes(col) && styles.eliminatedCol]}>
                   <Text style={[styles.headerText, eliminated.includes(col) && styles.eliminatedText]}>
                     {eliminated.includes(col) ? '❌' : winner === col ? '🏆' : '#'} {col}
                   </Text>
-                  <TouchableOpacity
-                    onPress={() => deleteCol(col)}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
+                  <TouchableOpacity onPress={() => deleteCol(col)} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Text style={styles.colDeleteText}>✕</Text>
                   </TouchableOpacity>
                 </View>
               ))}
-              <TouchableOpacity
-                style={[styles.colHeaderCell, { width: 48, justifyContent: 'center', alignItems: 'center' }]}
-                onPress={addCol} activeOpacity={0.7}
-              >
+              <TouchableOpacity style={[styles.colHeaderCell, { width: 48, justifyContent: 'center', alignItems: 'center' }]} onPress={addCol} activeOpacity={0.7}>
                 <Text style={styles.addColText}>＋</Text>
               </TouchableOpacity>
               <View style={[styles.colHeaderCell, { width: 48 }]} />
             </View>
 
-            {/* Data rows */}
             {rows.map((row, rowIdx) => (
               <View key={rowIdx} style={styles.dataRow}>
                 {cols.map(col => (
-                  <View key={col} style={[
-                    styles.cell, { width: COL_W },
-                    eliminated.includes(col) && styles.eliminatedCellBg
-                  ]}>
+                  <View key={col} style={[styles.cell, { width: COL_W }, eliminated.includes(col) && styles.eliminatedCellBg]}>
                     <TextInput
                       style={[styles.cellInput, eliminated.includes(col) && styles.eliminatedCellText]}
                       value={row[col]}
@@ -336,33 +276,9 @@ export default function App() {
               </View>
             ))}
 
-            {/* Add row */}
             <TouchableOpacity style={styles.addRow} onPress={addRow} activeOpacity={0.7}>
               <Text style={styles.addRowText}>＋  Add row</Text>
             </TouchableOpacity>
-
-            {/* SUM footer */}
-            <View style={styles.sumRow}>
-              {cols.map(col => {
-                const s = getSum(col, rows);
-                return (
-                  <View key={col} style={[
-                    styles.cell, styles.sumCell, { width: COL_W },
-                    eliminated.includes(col) && styles.eliminatedCellBg,
-                    winner === col && styles.winnerSumCell,
-                  ]}>
-                    <Text style={styles.sumLabel}>SUM </Text>
-                    <Text style={[
-                      styles.sumVal,
-                      eliminated.includes(col) && styles.eliminatedCellText,
-                      winner === col && { color: '#f39c12' },
-                    ]}>{s}</Text>
-                  </View>
-                );
-              })}
-              <View style={[styles.cell, styles.sumCell, { width: 48 }]} />
-              <View style={[styles.cell, styles.sumCell, { width: 48 }]} />
-            </View>
           </View>
         </ScrollView>
       </ScrollView>
@@ -383,42 +299,23 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG },
   header: { paddingTop: 52, paddingHorizontal: 20, paddingBottom: 10, backgroundColor: BG },
   title: { fontSize: 28, fontWeight: '700', color: TEXT, marginBottom: 8 },
-  titleInput: {
-    fontSize: 28, fontWeight: '700', color: TEXT,
-    borderBottomWidth: 1.5, borderBottomColor: ACCENT, paddingBottom: 2, marginBottom: 8,
-  },
+  titleInput: { fontSize: 28, fontWeight: '700', color: TEXT, borderBottomWidth: 1.5, borderBottomColor: ACCENT, paddingBottom: 2, marginBottom: 8 },
   headerRow2: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   remainingBox: { flexDirection: 'row', alignItems: 'center' },
   remainingLabel: { color: MUTED, fontSize: 13 },
   remainingVal: { color: '#2ecc71', fontSize: 16, fontWeight: '700' },
-  resetBtn: {
-    backgroundColor: '#2a2a2a', borderRadius: 8,
-    paddingVertical: 8, paddingHorizontal: 16,
-    borderWidth: 1, borderColor: '#3a3a3a',
-  },
+  resetBtn: { backgroundColor: '#2a2a2a', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 16, borderWidth: 1, borderColor: '#3a3a3a' },
   resetText: { color: TEXT, fontSize: 13, fontWeight: '600' },
   ruleText: { color: '#555', fontSize: 10, marginTop: 2 },
-  notifBox: {
-    backgroundColor: '#0d1f2b', borderLeftWidth: 4, borderLeftColor: ACCENT,
-    marginHorizontal: 16, marginBottom: 6, borderRadius: 8,
-    padding: 12, flexDirection: 'row', alignItems: 'flex-start',
-  },
+  notifBox: { backgroundColor: '#0d1f2b', borderLeftWidth: 4, borderLeftColor: ACCENT, marginHorizontal: 16, marginBottom: 6, borderRadius: 8, padding: 12, flexDirection: 'row', alignItems: 'flex-start' },
   winnerBox: { backgroundColor: '#2b1f00', borderLeftColor: '#f39c12' },
   notifText: { color: ACCENT, fontSize: 14, fontWeight: '600', flex: 1, lineHeight: 22 },
   winnerText: { color: '#f39c12', fontSize: 16 },
   notifCloseBtn: { padding: 4, marginLeft: 8 },
   notifClose: { color: MUTED, fontSize: 16 },
-  gameOverBox: {
-    backgroundColor: '#2b0d0d', borderLeftWidth: 4, borderLeftColor: NEGATIVE,
-    marginHorizontal: 16, marginBottom: 6, borderRadius: 8, padding: 10,
-  },
-  gameOverText: { color: NEGATIVE, fontSize: 13, fontWeight: '600' },
   statusScroll: { maxHeight: 80, marginHorizontal: 16, marginBottom: 6 },
   statusRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
-  statusCard: {
-    backgroundColor: SURFACE, borderRadius: 10, padding: 8,
-    minWidth: 80, alignItems: 'center', borderWidth: 0.5, borderColor: BORDER,
-  },
+  statusCard: { backgroundColor: SURFACE, borderRadius: 10, padding: 8, minWidth: 80, alignItems: 'center', borderWidth: 0.5, borderColor: BORDER },
   statusCardOut: { backgroundColor: '#161616', borderColor: '#2a2a2a', opacity: 0.5 },
   statusCardWin: { backgroundColor: '#2b1f00', borderColor: '#f39c12', borderWidth: 1.5 },
   statusName: { color: TEXT, fontSize: 11, fontWeight: '600' },
@@ -429,10 +326,7 @@ const styles = StyleSheet.create({
   statusMax: { color: '#555', fontSize: 9, marginTop: 1 },
   scrollArea: { flex: 1 },
   colHeaderRow: { flexDirection: 'row', backgroundColor: SURFACE, borderBottomWidth: 0.5, borderBottomColor: BORDER },
-  colHeaderCell: {
-    borderRightWidth: 0.5, borderRightColor: BORDER, height: 44,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8,
-  },
+  colHeaderCell: { borderRightWidth: 0.5, borderRightColor: BORDER, height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 },
   headerText: { color: MUTED, fontSize: 12, fontWeight: '500' },
   colDeleteText: { color: NEGATIVE, fontSize: 14, fontWeight: '700' },
   addColText: { color: ACCENT, fontSize: 18 },
@@ -447,9 +341,4 @@ const styles = StyleSheet.create({
   trashIcon: { fontSize: 18, color: NEGATIVE },
   addRow: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 0.5, borderBottomColor: BORDER },
   addRowText: { color: ACCENT, fontSize: 14, fontWeight: '500' },
-  sumRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#3a3a3a', backgroundColor: SURFACE },
-  sumCell: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, height: 40 },
-  winnerSumCell: { backgroundColor: '#2b1f00' },
-  sumLabel: { color: MUTED, fontSize: 11 },
-  sumVal: { color: TEXT, fontSize: 12, fontWeight: '700' },
 });
