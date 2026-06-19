@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar, KeyboardAvoidingView, Platform, Alert
@@ -22,6 +22,19 @@ export default function App() {
   const [eliminated, setEliminated] = useState([]);
   const [notification, setNotification] = useState('');
   const [winner, setWinner] = useState('');
+  const inputRefs = useRef({});
+  const jumpTimers = useRef({});
+
+  const getEnteredCounts = (currentRows) => {
+    const counts = {};
+    (currentRows || rows).forEach(row => {
+      cols.forEach(col => {
+        const v = parseFloat(row[col]);
+        if (!isNaN(v) && v > 0) counts[v] = (counts[v] || 0) + 1;
+      });
+    });
+    return counts;
+  };
 
   const getSum = (col, currentRows) => {
     const r = currentRows || rows;
@@ -31,8 +44,16 @@ export default function App() {
     }, 0);
   };
 
+  const getPositiveSum = (col, currentRows) => {
+    const r = currentRows || rows;
+    return r.reduce((acc, row) => {
+      const v = parseFloat(row[col]);
+      return acc + (isNaN(v) || v < 0 ? 0 : v);
+    }, 0);
+  };
+
   const totalScored = (currentRows) =>
-    cols.reduce((acc, c) => acc + getSum(c, currentRows), 0);
+    cols.reduce((acc, c) => acc + getPositiveSum(c, currentRows), 0);
 
   const remaining = (currentRows) => TOTAL - totalScored(currentRows);
 
@@ -79,25 +100,92 @@ export default function App() {
     }
   }, [rows]);
 
-  const updateCell = (rowIdx, col, value) => {
-    const safe = value.replace(/[^0-9]/g, '');
-    if (safe === '') {
-      setRows(rows.map((r, i) => i === rowIdx ? { ...r, [col]: '' } : r));
-      return;
+  const focusNextOrCreate = (rowIdx, col) => {
+    const nextRowIdx = rowIdx + 1;
+    if (nextRowIdx < rows.length) {
+      const key = `${nextRowIdx}-${col}`;
+      inputRefs.current[key]?.focus();
+    } else {
+      setRows(prev => {
+        const newRows = [...prev, makeEmptyRow(cols)];
+        setTimeout(() => {
+          const key = `${nextRowIdx}-${col}`;
+          inputRefs.current[key]?.focus();
+        }, 100);
+        return newRows;
+      });
     }
-    const num = parseInt(safe);
+  };
+
+  const validateAndJump = (rowIdx, col, num, currentRows) => {
+    const oldVal = parseFloat(currentRows[rowIdx][col]);
+    const oldPositive = (!isNaN(oldVal) && oldVal > 0) ? oldVal : 0;
+
     if (num > MAX_BALL) {
       Alert.alert('Invalid!', `Maximum ball number is ${MAX_BALL}`);
+      setRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, [col]: '' } : r));
       return;
     }
-    const oldVal = parseFloat(rows[rowIdx][col]) || 0;
-    const newTotal = totalScored(rows) - oldVal + num;
+
+    const counts = getEnteredCounts(currentRows);
+    const currentCount = counts[num] || 0;
+    const countWithoutCurrent = oldPositive === num ? currentCount - 1 : currentCount;
+    const maxAllowed = num === 6 ? 2 : 1;
+    if (countWithoutCurrent >= maxAllowed) {
+      const msg = num === 6 ? `Ball 6 can only be entered twice!` : `Ball ${num} has already been used!`;
+      Alert.alert('Duplicate!', msg);
+      setRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, [col]: '' } : r));
+      return;
+    }
+
+    const newTotal = totalScored(currentRows);
     if (newTotal > TOTAL) {
-      const canAdd = TOTAL - totalScored(rows) + oldVal;
+      const canAdd = TOTAL - totalScored(currentRows) + oldPositive;
       Alert.alert('Exceeds 120!', `Only ${canAdd} point${canAdd === 1 ? '' : 's'} remaining!`);
+      setRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, [col]: '' } : r));
       return;
     }
-    setRows(rows.map((r, i) => i === rowIdx ? { ...r, [col]: safe } : r));
+
+    setTimeout(() => focusNextOrCreate(rowIdx, col), 50);
+  };
+
+  const updateCell = (rowIdx, col, value) => {
+    const safe = value.replace(/[^0-9-]/g, '').replace(/(?!^)-/g, '');
+
+    if (safe === '' || safe === '-') {
+      setRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, [col]: safe } : r));
+      return;
+    }
+
+    const num = parseFloat(safe);
+    const updated = rows.map((r, i) => i === rowIdx ? { ...r, [col]: safe } : r);
+    setRows(updated);
+
+    if (num > 0) {
+      const timerKey = `${rowIdx}-${col}`;
+      if (jumpTimers.current[timerKey]) {
+        clearTimeout(jumpTimers.current[timerKey]);
+      }
+
+      if (num >= 4 && num <= 9 && safe.length === 1) {
+        // 4-9: jump immediately
+        validateAndJump(rowIdx, col, num, updated);
+      } else if (safe.length === 1 && num >= 1 && num <= 3) {
+        // 1-3: wait 1500ms in case user types 2nd digit (10-15 start with 1)
+        jumpTimers.current[timerKey] = setTimeout(() => {
+          setRows(prev => {
+            const currentVal = prev[rowIdx]?.[col];
+            if (currentVal === safe) {
+              validateAndJump(rowIdx, col, num, prev);
+            }
+            return prev;
+          });
+        }, 1500);
+      } else if (safe.length === 2) {
+        // 10-15: jump after 2nd digit
+        validateAndJump(rowIdx, col, num, updated);
+      }
+    }
   };
 
   const addRow = () => {
@@ -172,8 +260,7 @@ export default function App() {
             value={title}
             onChangeText={setTitle}
             onBlur={() => setEditingTitle(false)}
-            autoFocus
-            selectTextOnFocus
+            autoFocus selectTextOnFocus
           />
         ) : (
           <TouchableOpacity onPress={() => setEditingTitle(true)}>
@@ -191,7 +278,7 @@ export default function App() {
             <Text style={styles.resetText}>🔄 Reset</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.ruleText}>Balls: 1–15  •  Total: 120 pts</Text>
+        <Text style={styles.ruleText}>Balls: 1–15  •  Total: 120 pts  •  No repeats</Text>
       </View>
 
       {notification ? (
@@ -248,19 +335,26 @@ export default function App() {
 
             {rows.map((row, rowIdx) => (
               <View key={rowIdx} style={styles.dataRow}>
-                {cols.map(col => (
+                {cols.map((col, colIdx) => (
                   <View key={col} style={[styles.cell, { width: COL_W }, eliminated.includes(col) && styles.eliminatedCellBg]}>
                     <TextInput
-                      style={[styles.cellInput, eliminated.includes(col) && styles.eliminatedCellText]}
+                      ref={ref => inputRefs.current[`${rowIdx}-${col}`] = ref}
+                      style={[
+                        styles.cellInput,
+                        eliminated.includes(col) && styles.eliminatedCellText,
+                        parseFloat(row[col]) < 0 && styles.negativeInput,
+                      ]}
                       value={row[col]}
                       onChangeText={v => updateCell(rowIdx, col, v)}
-                      keyboardType="number-pad"
+                      keyboardType="numeric"
                       placeholder="0"
                       placeholderTextColor="#333"
                       textAlign="right"
                       selectionColor="#4a90d9"
                       editable={!eliminated.includes(col) && rem > 0 && !winner}
-                      maxLength={2}
+                      maxLength={3}
+                      returnKeyType="next"
+                      onSubmitEditing={() => focusNextOrCreate(rowIdx, col)}
                     />
                   </View>
                 ))}
@@ -282,6 +376,8 @@ export default function App() {
           </View>
         </ScrollView>
       </ScrollView>
+
+      <Text style={styles.devText}>Mikeylan 😎</Text>
 
     </KeyboardAvoidingView>
   );
@@ -335,10 +431,12 @@ const styles = StyleSheet.create({
   cell: { borderRightWidth: 0.5, borderRightColor: BORDER, height: 48, justifyContent: 'center' },
   dataRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: BORDER },
   cellInput: { color: TEXT, fontSize: 14, paddingHorizontal: 10, height: '100%' },
+  negativeInput: { color: NEGATIVE },
   eliminatedCellBg: { backgroundColor: '#161616' },
   eliminatedCellText: { color: '#333' },
   deleteCell: { alignItems: 'center' },
   trashIcon: { fontSize: 18, color: NEGATIVE },
   addRow: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 0.5, borderBottomColor: BORDER },
   addRowText: { color: ACCENT, fontSize: 14, fontWeight: '500' },
+  devText: { textAlign: 'center', color: '#2ecc71', fontSize: 11, paddingVertical: 6, fontWeight: '600' },
 });
