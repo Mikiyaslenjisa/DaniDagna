@@ -4,12 +4,17 @@
     "slug": "danidagna",
     "version": "1.0.0",
     "owner": "mikeylans-team",
+    "icon": "./play_store_512.png",
     "platforms": ["android"],
     "splash": {
       "backgroundColor": "#191919"
     },
     "android": {
-      "package": "com.mikeylan.danidagna"
+      "package": "com.mikeylan.danidagna",
+      "adaptiveIcon": {
+        "foregroundImage": "./play_store_512.png",
+        "backgroundColor": "#191919"
+      }
     },
     "extra": {
       "eas": {
