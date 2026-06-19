@@ -15,7 +15,7 @@ const makeEmptyRow = (cols) => {
 };
 
 export default function App() {
-  const [title, setTitle] = useState('Dani Dagna');
+  const [title, setTitle] = useState('Dagna');
   const [editingTitle, setEditingTitle] = useState(false);
   const [cols, setCols] = useState([...initialCols]);
   const [rows, setRows] = useState([makeEmptyRow(initialCols)]);
