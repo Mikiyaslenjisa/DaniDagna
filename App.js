@@ -6,7 +6,7 @@ import {
 
 const initialCols = ['A', 'B', 'C', 'D'];
 const TOTAL = 120;
-const MAX_BALL = 15;
+const MAX_BALL = 120;
 
 const makeEmptyRow = (cols) => {
   const row = {};
@@ -15,7 +15,7 @@ const makeEmptyRow = (cols) => {
 };
 
 export default function App() {
-  const [title, setTitle] = useState('Dagna');
+  const [title, setTitle] = useState('Dani Dagna');
   const [editingTitle, setEditingTitle] = useState(false);
   const [cols, setCols] = useState([...initialCols]);
   const [rows, setRows] = useState([makeEmptyRow(initialCols)]);
@@ -171,7 +171,7 @@ export default function App() {
         // 4-9: jump immediately
         validateAndJump(rowIdx, col, num, updated);
       } else if (safe.length === 1 && num >= 1 && num <= 3) {
-        // 1-3: wait 1500ms in case user types 2nd digit (10-15 start with 1)
+        // 1-3: wait 1500ms for possible 2nd digit
         jumpTimers.current[timerKey] = setTimeout(() => {
           setRows(prev => {
             const currentVal = prev[rowIdx]?.[col];
@@ -182,7 +182,18 @@ export default function App() {
           });
         }, 1500);
       } else if (safe.length === 2) {
-        // 10-15: jump after 2nd digit
+        // 2 digits: wait 1500ms for possible 3rd digit
+        jumpTimers.current[timerKey] = setTimeout(() => {
+          setRows(prev => {
+            const currentVal = prev[rowIdx]?.[col];
+            if (currentVal === safe) {
+              validateAndJump(rowIdx, col, num, prev);
+            }
+            return prev;
+          });
+        }, 1500);
+      } else if (safe.length === 3) {
+        // 3 digits (100-120): jump immediately
         validateAndJump(rowIdx, col, num, updated);
       }
     }
@@ -278,7 +289,7 @@ export default function App() {
             <Text style={styles.resetText}>🔄 Reset</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.ruleText}>Balls: 1–15  •  Total: 120 pts  •  No repeats</Text>
+        <Text style={styles.ruleText}>Balls: 1–120  •  Total: 120 pts  •  No repeats</Text>
       </View>
 
       {notification ? (
